@@ -2,17 +2,17 @@
 
 一份自己维护的私有 PT / BT 站点域名集合，用于代理工具的分流规则。
 
-原始列表去重后按 ASCII 字典序排序，并同时输出多种客户端可直接引用的规则格式。
+域名去重后按 ASCII 字典序排序，并同时输出多种客户端可直接引用的规则格式。
 
 ## 文件说明
 
 | 文件 | 说明 |
 | --- | --- |
-| `source/raw.txt` | 原始域名列表，手工维护。一行一个，可留空行、可写 `#` 注释、顺序随意 |
-| `domains.txt` | 去重排序后的纯域名列表，每行一个 |
-| `clash.yaml` | Mihomo / Clash rule-provider（`behavior: domain`） |
-| `singbox.json` | sing-box rule-set（version 2） |
-| `tools/build.ps1` | 从 `source/raw.txt` 生成上面三个产物 |
+| `domains.txt` | **唯一维护入口**，一行一个域名；它本身也是可直接订阅的产物 |
+| `clash.yaml` | Mihomo / Clash rule-provider（`behavior: domain`），脚本生成，勿手改 |
+| `singbox.json` | sing-box rule-set（version 2），脚本生成，勿手改 |
+| `tools/build.ps1` | 归一化 `domains.txt` 并生成上面两个规则文件 |
+| `tools/update.ps1` | 一键完成「构建 + 提交 + 推送」 |
 
 ## 订阅地址
 
@@ -21,6 +21,63 @@ https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/domains.txt
 https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/clash.yaml
 https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/singbox.json
 ```
+
+## 日常维护
+
+只需要动 `domains.txt` 一个文件，其他都交给脚本。
+
+### 加域名
+
+打开 `domains.txt`，在**任意位置**加一行：
+
+```
+example.com
+```
+
+顺序不用管、大小写不用管、重复了也没关系。也可以直接写 `+.example.com`、`https://example.com/`、`example.com:443`，脚本会自动整理成 `example.com`。
+
+### 删失效域名
+
+在 `domains.txt` 里删掉对应那一行即可。
+
+### 生成并推送
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\update.ps1
+```
+
+这一条命令会依次完成：整理 `domains.txt` → 重新生成 `clash.yaml` 和 `singbox.json` → 提交推送。
+
+想自定义提交信息：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\update.ps1 -Message "add example.com"
+```
+
+如果习惯手动操作，等价的两步是：
+
+```powershell
+# 1. 整理清单 + 重新生成规则文件
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\build.ps1
+
+# 2. 提交推送
+git add -A
+git commit -m "update: refresh domain list"
+git push
+```
+
+> 注意：本机 `git` 没有加进 PATH，直接敲 `git` 会提示找不到命令。用 `tools\update.ps1` 最省事，它内置了本机 PortableGit 的路径；若要手动执行 git，需写完整路径或用 `-GitExe` 指定。
+
+脚本会自动完成的清理：
+
+- 去空行、跳过 `#` 注释行
+- 去掉 `http://`、`https://` 等协议前缀
+- 去掉端口、路径、查询串
+- 去掉开头的 `+.`、`*.` 通配前缀
+- 去掉结尾多余的点
+- 统一转小写
+- 去重
+- 按 ASCII 字典序（ordinal）排序
 
 ## 在 Mihomo / Clash 中使用
 
@@ -66,19 +123,8 @@ rules:
 - `clash.yaml`：每条域名加 `+.` 前缀（`+.example.com` 同时匹配 `example.com` 与 `www.example.com`）
 - `singbox.json`：使用 `domain_suffix`
 
-若需要严格精确匹配（只匹配列出的域名本身），构建时加 `-Exact` 参数，此时 Clash 不加前缀、sing-box 改用 `domain` 字段。
-
-## 维护方式
+若需要严格精确匹配（只匹配列出的域名本身），构建时加 `-Exact`：
 
 ```powershell
-# 1. 编辑 source/raw.txt，把新域名追加进去
-# 2. 重新生成产物
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\build.ps1
-
-# 3. 提交并推送
-git add -A
-git commit -m "update: add new domains"
-git push
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\build.ps1 -Exact
 ```
-
-构建脚本会自动完成：去空白、跳过空行与 `#` 注释、去掉 `http://` 等协议前缀、去掉端口/路径/查询串、去掉结尾的点、统一转小写、去重、按 ordinal 字典序排序。
