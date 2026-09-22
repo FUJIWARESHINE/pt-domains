@@ -39,6 +39,7 @@ dubhe.site
 duckboobee.org
 eastgame.org
 et8.org
+example.com
 exoticaz.to
 filelist.io
 gamegamept.com
@@ -171,4 +172,3 @@ xingwan.cc
 xingyungept.org
 zhuque.in
 zmpt.cc
-example.com
