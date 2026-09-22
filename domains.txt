@@ -171,3 +171,4 @@ xingwan.cc
 xingyungept.org
 zhuque.in
 zmpt.cc
+example.com
