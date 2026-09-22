@@ -1,0 +1,43 @@
+name: build rules
+
+# 只要 domains.txt 有改动被推上来（网页上直接编辑提交也算），就自动重新生成
+# clash.yaml 和 singbox.json，并把结果提交回仓库。因此本地无需运行任何命令。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'domains.txt'
+      - 'tools/build.ps1'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-rules
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Regenerate rule files
+        run: pwsh -NoProfile -File ./tools/build.ps1
+
+      - name: Commit and push if changed
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Nothing to update."
+            exit 0
+          fi
+          echo "Changed files:"
+          git status --porcelain
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: regenerate rule files [skip ci]"
+          git push

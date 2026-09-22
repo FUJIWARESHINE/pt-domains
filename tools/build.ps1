@@ -95,17 +95,24 @@ foreach ($d in $domains) { $clash.Add("  - '$clashPrefix$d'") }
 Write-Lines $pClash $clash.ToArray()
 
 # 3) singbox.json —— rule-set，version 2
+# 手工拼接而非 ConvertTo-Json：后者的缩进/转义在不同 PowerShell 版本间不一致，
+# 会导致本地（5.1）与 GitHub Actions（pwsh 7）生成的文件反复互相覆盖。
 $key = if ($Exact) { 'domain' } else { 'domain_suffix' }
-$inner = New-Object System.Collections.Specialized.OrderedDictionary
-$inner.Add($key, $domains)
-$rule = New-Object System.Collections.Specialized.OrderedDictionary
-$rule.Add('rules', @($inner))
-$set = New-Object System.Collections.Specialized.OrderedDictionary
-$set.Add('version', 2)
-foreach ($k in $rule.Keys) { $set.Add($k, $rule[$k]) }
-
-$json = $set | ConvertTo-Json -Depth 10
-[System.IO.File]::WriteAllText($pSingbox, ($json -replace "`r`n", "`n") + "`n", $utf8NoBom)
+$sb = New-Object System.Text.StringBuilder
+[void]$sb.Append("{`n")
+[void]$sb.Append("  `"version`": 2,`n")
+[void]$sb.Append("  `"rules`": [`n")
+[void]$sb.Append("    {`n")
+[void]$sb.Append("      `"$key`": [`n")
+for ($i = 0; $i -lt $domains.Count; $i++) {
+    $tail = if ($i -lt ($domains.Count - 1)) { ',' } else { '' }
+    [void]$sb.Append("        `"$($domains[$i])`"$tail`n")
+}
+[void]$sb.Append("      ]`n")
+[void]$sb.Append("    }`n")
+[void]$sb.Append("  ]`n")
+[void]$sb.Append("}")
+[System.IO.File]::WriteAllText($pSingbox, $sb.ToString() + "`n", $utf8NoBom)
 
 # ---------- 汇总 ----------
 Write-Host ''
