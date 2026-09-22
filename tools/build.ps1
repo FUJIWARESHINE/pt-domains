@@ -12,11 +12,13 @@
       按 ASCII 字典序（ordinal）排序
 
     然后同步生成：
-      clash.yaml      Mihomo / Clash rule-provider（behavior: domain）
-      singbox.json    sing-box rule-set
+      clash.yaml        Mihomo / Clash rule-provider（behavior: domain）
+      singbox.json      sing-box rule-set
+      pt-domains.list   DOMAIN-SUFFIX 纯文本规则列表（软路由 / classical 格式）
 
     默认产出「域名 + 其子域名」语义：Clash 侧给每条加 "+." 前缀，
-    sing-box 侧使用 domain_suffix。加 -Exact 可改为严格精确匹配。
+    sing-box 侧使用 domain_suffix，.list 侧使用 DOMAIN-SUFFIX。
+    加 -Exact 可改为严格精确匹配。
 
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File tools\build.ps1
@@ -81,6 +83,7 @@ function Write-Lines([string]$Path, [string[]]$Lines) {
 $pDomains = $Source
 $pClash   = Join-Path $OutDir 'clash.yaml'
 $pSingbox = Join-Path $OutDir 'singbox.json'
+$pList    = Join-Path $OutDir 'pt-domains.list'
 
 # 1) domains.txt —— 纯列表，无注释无空行，既是清单也是可直接按行引用的产物
 Write-Lines $pDomains $domains
@@ -114,10 +117,18 @@ for ($i = 0; $i -lt $domains.Count; $i++) {
 [void]$sb.Append("}")
 [System.IO.File]::WriteAllText($pSingbox, $sb.ToString() + "`n", $utf8NoBom)
 
+# 4) pt-domains.list —— DOMAIN-SUFFIX 纯文本规则列表
+# 不带 -Exact 时用 DOMAIN-SUFFIX（域名及其所有子域名都命中），
+# 带 -Exact 时用 DOMAIN（只命中列出的域名本身）。
+$listRule = if ($Exact) { 'DOMAIN' } else { 'DOMAIN-SUFFIX' }
+$list = New-Object System.Collections.Generic.List[string]
+foreach ($d in $domains) { $list.Add("$listRule,$d") }
+Write-Lines $pList $list.ToArray()
+
 # ---------- 汇总 ----------
 Write-Host ''
 Write-Host ("list    : " + $pDomains)
 Write-Host ("mode    : " + $(if ($Exact) { 'exact' } else { 'domain + subdomains' }))
 Write-Host ("domains : " + $domains.Count + " unique (" + $dupes + " duplicates removed)")
-Write-Host ("written : domains.txt / clash.yaml / singbox.json")
+Write-Host ("written : domains.txt / clash.yaml / singbox.json / pt-domains.list")
 Write-Host ''

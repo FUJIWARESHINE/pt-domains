@@ -11,9 +11,10 @@
 | 文件 | 说明 |
 | --- | --- |
 | `domains.txt` | **唯一维护入口**，一行一个域名；它本身也是可直接订阅的产物 |
+| `pt-domains.list` | `DOMAIN-SUFFIX` 纯文本规则列表（软路由用），自动生成，勿手改 |
 | `clash.yaml` | Mihomo / Clash rule-provider（`behavior: domain`），自动生成，勿手改 |
 | `singbox.json` | sing-box rule-set（version 2），自动生成，勿手改 |
-| `tools/build.ps1` | 归一化 `domains.txt` 并生成上面两个规则文件 |
+| `tools/build.ps1` | 归一化 `domains.txt` 并生成上面三个规则文件 |
 | `tools/update.ps1` | 本机一键完成「构建 + 提交 + 推送」 |
 | `.github/workflows/build.yml` | 推送 `domains.txt` 后在云端自动重建并回写 |
 
@@ -21,6 +22,7 @@
 
 ```
 https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/domains.txt
+https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/pt-domains.list
 https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/clash.yaml
 https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/singbox.json
 ```
@@ -63,7 +65,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\update.ps1
 
 不管用哪种方式，只要 `domains.txt` 有新提交被推上来，GitHub Actions 就会自动：
 
-1. 在云端重新生成 `clash.yaml` 和 `singbox.json`
+1. 在云端重新生成 `clash.yaml`、`singbox.json` 和 `pt-domains.list`
 2. 如果结果有变化，以 `github-actions[bot]` 的身份提交回仓库
 
 整个过程十几秒，你在网页上刷新就能看到。因为你只是改了清单、没有跑脚本，所以第一次由 Actions 补上生成的文件；如果用方式二，本地已经生成好了，Actions 会发现没有变化直接跳过。
@@ -82,6 +84,29 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\update.ps1
 - 统一转小写
 - 去重
 - 按 ASCII 字典序（ordinal）排序
+
+## 在软路由中使用（`pt-domains.list`）
+
+文件每行形如：
+
+```
+DOMAIN-SUFFIX,example.com
+```
+
+`DOMAIN-SUFFIX` 表示同时命中该域名及其所有子域名。把文件下载到软路由，按设备自带的分流 / 规则列表功能导入即可。
+
+如果软路由跑的是 Mihomo 内核，也可以直接当 `classical` 规则集引用：
+
+```yaml
+rule-providers:
+  pt-list:
+    type: http
+    behavior: classical
+    format: text
+    interval: 86400
+    url: "https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/pt-domains.list"
+    path: ./ruleset/pt.list
+```
 
 ## 在 Mihomo / Clash 中使用
 
@@ -126,8 +151,9 @@ rules:
 
 - `clash.yaml`：每条域名加 `+.` 前缀（`+.example.com` 同时匹配 `example.com` 与 `www.example.com`）
 - `singbox.json`：使用 `domain_suffix`
+- `pt-domains.list`：使用 `DOMAIN-SUFFIX`
 
-若需要严格精确匹配（只匹配列出的域名本身），本机构建时加 `-Exact`：
+若需要严格精确匹配（只匹配列出的域名本身），本机构建时加 `-Exact`，此时 `.list` 会改用 `DOMAIN`：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\build.ps1 -Exact
