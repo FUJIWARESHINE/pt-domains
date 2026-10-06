@@ -7,3 +7,6 @@ Thumbs.db
 # 编辑器
 .vscode/
 .idea/
+
+# 本地缓存的 mihomo 内核（由 tools/get-mihomo.ps1 下载，约 20MB，不入库）
+tools/.bin/

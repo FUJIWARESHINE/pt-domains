@@ -1,13 +1,16 @@
 name: build rules
 
-# 只要 domains.txt 有改动被推上来（网页上直接编辑提交也算），就自动重新生成
-# clash.yaml 和 singbox.json，并把结果提交回仓库。因此本地无需运行任何命令。
+# 只要 domains.txt（或构建脚本 / 内核版本）有改动被推上来（网页上直接编辑提交也算），
+# 就自动重新生成 clash.yaml、singbox.json、pt-domains.list 和 pt-domains.mrs，
+# 并把结果提交回仓库。因此本地无需运行任何命令。
 on:
   push:
     branches: [main]
     paths:
       - 'domains.txt'
       - 'tools/build.ps1'
+      - 'tools/get-mihomo.ps1'
+      - 'tools/mihomo.version'
       - '.github/workflows/build.yml'
   workflow_dispatch:
 
@@ -25,8 +28,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 下载 tools/mihomo.version 里锁定的那个版本，保证云端与本地产出的 .mrs 完全一致
+      - name: Fetch mihomo kernel
+        run: pwsh -NoProfile -File ./tools/get-mihomo.ps1
+
       - name: Regenerate rule files
-        run: pwsh -NoProfile -File ./tools/build.ps1
+        run: pwsh -NoProfile -File ./tools/build.ps1 -RequireMrs
 
       - name: Commit and push if changed
         run: |

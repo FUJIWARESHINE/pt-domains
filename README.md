@@ -14,7 +14,10 @@
 | `pt-domains.list` | `DOMAIN-SUFFIX` 纯文本规则列表（软路由用），自动生成，勿手改 |
 | `clash.yaml` | Mihomo / Clash rule-provider（`behavior: domain`），自动生成，勿手改 |
 | `singbox.json` | sing-box rule-set（version 2），自动生成，勿手改 |
-| `tools/build.ps1` | 归一化 `domains.txt` 并生成上面三个规则文件 |
+| `pt-domains.mrs` | Mihomo 二进制规则集（MRS），自动生成，勿手改 |
+| `tools/build.ps1` | 归一化 `domains.txt` 并生成上面四个规则文件 |
+| `tools/get-mihomo.ps1` | 下载 `tools/mihomo.version` 锁定的 mihomo 内核到 `tools/.bin/`（编译 `.mrs` 用） |
+| `tools/mihomo.version` | 锁定 mihomo 内核版本，本地与云端共用同一版本 |
 | `tools/update.ps1` | 本机一键完成「构建 + 提交 + 推送」 |
 | `.github/workflows/build.yml` | 推送 `domains.txt` 后在云端自动重建并回写 |
 
@@ -25,6 +28,7 @@ https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/domains.txt
 https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/pt-domains.list
 https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/clash.yaml
 https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/singbox.json
+https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/pt-domains.mrs
 ```
 
 ## 日常维护
@@ -65,8 +69,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\update.ps1
 
 不管用哪种方式，只要 `domains.txt` 有新提交被推上来，GitHub Actions 就会自动：
 
-1. 在云端重新生成 `clash.yaml`、`singbox.json` 和 `pt-domains.list`
-2. 如果结果有变化，以 `github-actions[bot]` 的身份提交回仓库
+1. 拉取 `tools/mihomo.version` 锁定的 mihomo 内核
+2. 在云端重新生成 `clash.yaml`、`singbox.json`、`pt-domains.list` 和 `pt-domains.mrs`
+3. 如果结果有变化，以 `github-actions[bot]` 的身份提交回仓库
 
 整个过程十几秒，你在网页上刷新就能看到。因为你只是改了清单、没有跑脚本，所以第一次由 Actions 补上生成的文件；如果用方式二，本地已经生成好了，Actions 会发现没有变化直接跳过。
 
@@ -124,6 +129,50 @@ rules:
   - RULE-SET,pt,PROXY
 ```
 
+## 使用二进制规则集（`pt-domains.mrs`）
+
+`pt-domains.mrs` 是 Mihomo 的二进制规则集格式（MRS）。它和 `clash.yaml` 表达的是**完全相同的规则**，但加载更快、内存占用更低，规则条目多时优势明显。官方 geosite 规则包用的就是这个格式，例如：
+
+```
+https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/microsoft.mrs
+```
+
+在 Mihomo 里引用时把 `format` 改成 `mrs` 即可（`behavior` 仍然是 `domain`）：
+
+```yaml
+rule-providers:
+  pt:
+    type: http
+    behavior: domain
+    format: mrs
+    interval: 86400
+    url: "https://raw.githubusercontent.com/FUJIWARESHINE/pt-domains/main/pt-domains.mrs"
+    path: ./ruleset/pt.mrs
+
+rules:
+  - RULE-SET,pt,PROXY
+```
+
+> MRS 需要 **Mihomo v1.17.0 及以上**内核；原版 Clash Premium 不支持，请继续用 `clash.yaml`。
+
+### 它是怎么生成的
+
+`.mrs` 由 mihomo 内核自带的转换命令从 `clash.yaml` 编译而来，语义因此与 `clash.yaml` 严格一致：
+
+```bash
+mihomo convert-ruleset domain yaml clash.yaml pt-domains.mrs
+```
+
+内核版本锁定在 `tools/mihomo.version`，本地和 GitHub Actions 下载的是同一个版本，两边生成的 `.mrs` 字节一致，不会互相覆盖。
+
+本机想手动重建时，先拉一次内核（约 20MB，缓存在 `tools/.bin/`，已在 `.gitignore` 中忽略，不会入库）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\get-mihomo.ps1
+```
+
+抓不到内核时 `build.ps1` 只会警告并跳过 `.mrs`，其余产物照常生成；云端 Actions 则会强制要求生成，缺了直接失败。
+
 ## 在 sing-box 中使用
 
 ```json
@@ -150,6 +199,7 @@ rules:
 默认生成的是「域名 + 其子域名」语义：
 
 - `clash.yaml`：每条域名加 `+.` 前缀（`+.example.com` 同时匹配 `example.com` 与 `www.example.com`）
+- `pt-domains.mrs`：从 `clash.yaml` 编译而来，所以语义和它完全一致
 - `singbox.json`：使用 `domain_suffix`
 - `pt-domains.list`：使用 `DOMAIN-SUFFIX`
 

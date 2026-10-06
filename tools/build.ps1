@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     归一化域名清单，并生成配套的规则产物。
 
@@ -15,6 +15,12 @@
       clash.yaml        Mihomo / Clash rule-provider（behavior: domain）
       singbox.json      sing-box rule-set
       pt-domains.list   DOMAIN-SUFFIX 纯文本规则列表（软路由 / classical 格式）
+      pt-domains.mrs    Mihomo 二进制规则集（由 clash.yaml 经 mihomo 内核编译）
+
+    .mrs 是 Mihomo 的二进制规则集，加载比 YAML 快得多，需要 mihomo 内核（>= v1.17.0）
+    才能生成。本机可先运行 tools/get-mihomo.ps1 把固定版本的内核下到 tools/.bin/。
+    找不到内核时只警告并跳过 .mrs，其余产物照常生成；加 -RequireMrs 则改为直接报错。
+    GitHub Actions 会自动准备内核，因此云端始终会生成 .mrs。
 
     默认产出「域名 + 其子域名」语义：Clash 侧给每条加 "+." 前缀，
     sing-box 侧使用 domain_suffix，.list 侧使用 DOMAIN-SUFFIX。
@@ -32,10 +38,19 @@ param(
     [string]$Source,
 
     # 严格精确匹配（Clash 不加 "+." 前缀，sing-box 用 domain 而非 domain_suffix）
-    [switch]$Exact
+    [switch]$Exact,
+
+    # mihomo 可执行文件路径；缺省按 MIHOMO_BIN 环境变量 / PATH / tools/.bin/ 依次查找
+    [string]$MihomoPath,
+
+    # 找不到 mihomo 时直接报错（默认只警告并跳过 pt-domains.mrs）
+    [switch]$RequireMrs
 )
 
 $ErrorActionPreference = 'Stop'
+
+$isWin   = ($env:OS -eq 'Windows_NT')
+$binName = if ($isWin) { 'mihomo.exe' } else { 'mihomo' }
 
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $Source) { $Source = Join-Path $root 'domains.txt' }
@@ -125,10 +140,49 @@ $list = New-Object System.Collections.Generic.List[string]
 foreach ($d in $domains) { $list.Add("$listRule,$d") }
 Write-Lines $pList $list.ToArray()
 
+# 5) pt-domains.mrs —— Mihomo 二进制规则集
+# 直接由 clash.yaml 编译而来，所以它的匹配语义与 clash.yaml 完全一致
+# （默认含子域名，-Exact 时精确匹配）。二进制产物请勿手改。
+$pMrs = Join-Path $OutDir 'pt-domains.mrs'
+
+$mihomo = $null
+if ($MihomoPath) {
+    $mihomo = [System.IO.Path]::GetFullPath($MihomoPath)
+    if (-not (Test-Path -LiteralPath $mihomo)) { throw "mihomo not found: $mihomo" }
+} elseif ($env:MIHOMO_BIN -and (Test-Path -LiteralPath $env:MIHOMO_BIN)) {
+    $mihomo = [System.IO.Path]::GetFullPath($env:MIHOMO_BIN)
+} else {
+    $cmd = Get-Command $binName -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source) {
+        $mihomo = $cmd.Source
+    } else {
+        foreach ($name in @($binName, 'mihomo')) {
+            $cand = Join-Path $PSScriptRoot (Join-Path '.bin' $name)
+            if (Test-Path -LiteralPath $cand) { $mihomo = $cand; break }
+        }
+    }
+}
+
+$mrsBuilt = $false
+if ($mihomo) {
+    & $mihomo convert-ruleset domain yaml $pClash $pMrs
+    if ($LASTEXITCODE -ne 0) { throw "mihomo convert-ruleset failed (exit $LASTEXITCODE)" }
+    if (-not (Test-Path -LiteralPath $pMrs)) { throw "mihomo did not produce $pMrs" }
+    $mrsBuilt = $true
+} elseif ($RequireMrs) {
+    throw "mihomo not found and -RequireMrs is set. Run tools/get-mihomo.ps1 first, or pass -MihomoPath <file>."
+} else {
+    Write-Warning "mihomo not found - skipped pt-domains.mrs. Run tools/get-mihomo.ps1 to enable it."
+}
+
 # ---------- 汇总 ----------
+$written = 'domains.txt / clash.yaml / singbox.json / pt-domains.list'
+if ($mrsBuilt) { $written += ' / pt-domains.mrs' }
+
 Write-Host ''
 Write-Host ("list    : " + $pDomains)
 Write-Host ("mode    : " + $(if ($Exact) { 'exact' } else { 'domain + subdomains' }))
 Write-Host ("domains : " + $domains.Count + " unique (" + $dupes + " duplicates removed)")
-Write-Host ("written : domains.txt / clash.yaml / singbox.json / pt-domains.list")
+Write-Host ("mihomo  : " + $(if ($mihomo) { $mihomo } else { '(not found, .mrs skipped)' }))
+Write-Host ("written : " + $written)
 Write-Host ''
