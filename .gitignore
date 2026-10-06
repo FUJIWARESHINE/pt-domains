@@ -10,3 +10,6 @@ Thumbs.db
 
 # 本地缓存的 mihomo 内核（由 tools/get-mihomo.ps1 下载，约 20MB，不入库）
 tools/.bin/
+
+# 本地工作区数据（编辑器/助手产生的临时记录，不入库）
+.workbuddy/
