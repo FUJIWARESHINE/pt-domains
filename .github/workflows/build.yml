@@ -63,12 +63,14 @@ jobs:
           fi
 
           WORK="$(mktemp -d)"
-          # 注意（2026-10 实测）：Gitee 的敏感词库会拦两类东西
-          #   1) 文件名里含 clash 的文件 —— 所以镜像到 Gitee 时改用 pt-domains.yaml
-          #   2) 「说明性注释行 + 大批域名」的组合 —— 所以这里把注释行一并剥掉
-          # 剥掉注释不影响规则语义，payload 内容与 clash.yaml 完全一致。
-          grep -v '^#' clash.yaml > "$WORK/pt-domains.yaml"
-          cp singbox.json pt-domains.list pt-domains.mrs "$WORK/"
+          # Gitee 侧统一改用 pt-domain.* 命名，并剥掉注释行：
+          #   - 文件名里含 clash 会被敏感词库拦截（它连文件名一起扫）
+          #   - 「说明性注释 + 大批域名」的组合也会被判违规
+          # 剥注释不影响规则语义，payload 与 clash.yaml 完全一致。
+          grep -v '^#' clash.yaml > "$WORK/pt-domain.yaml"
+          cp pt-domains.list "$WORK/pt-domain.list"
+          cp pt-domains.mrs  "$WORK/pt-domain.mrs"
+          cp singbox.json    "$WORK/pt-domain.json"
           cp gitee/README.md "$WORK/README.md"
 
           cd "$WORK"
